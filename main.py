@@ -20,6 +20,34 @@ import math
 """
 Opcodes:
 0  - NOP
+1  - NOP
+
+2  - Input character
+3  - Output character
+4  - Input number
+5  - Output number
+
+6  - Push value of next opsec
+7  - Pop
+8  - Duplicate
+9  - Swap
+
+10 - Add
+11 - Subtract
+12 - Multiply
+13 - Divide
+14 - Modulo
+
+15 - Jump if true
+16 - Unconditional jump
+
+17 - Not
+18 - And
+19 - Or
+
+20 - Transfer value to interstack queue
+21 - Transfer value from interstack queue
+
 22 - NOP
 """
 
@@ -27,13 +55,18 @@ class Stack:
   idx = 0
   stack = []
   def __init__(self, opcodes) -> None:
-      self.opcodes = opcodes
-  def tick(self):
+      self.opcodes = opcodes[:]
+      for x in reversed(opcodes):
+        if x == 0:
+          del self.opcodes[-1]
+        else:
+          break
+  def tick(self, ctx):
     opcode = self.opcodes[self.idx]
 
 file = "a.wav"
 # length (in seconds) of each bit we will process
-opsec_size = 1
+opsec_size = 0.5
 data, sr = librosa.load(file)
 
 n_fft=2048
@@ -60,7 +93,6 @@ for stack in stack_info:
     time_per_bucket = time / len(stack)
     buckets_per_opsec = opsec_size / time_per_bucket
     is_whole_number = math.isclose(buckets_per_opsec, round(buckets_per_opsec))
-
     res = []
     sum = []
     i = 0
@@ -70,11 +102,20 @@ for stack in stack_info:
         if i != 0 and i % math.floor(buckets_per_opsec) == 0:
             if not is_whole_number and len(stack) > 0:
                 sum.append(stack[0])
-            res.append(np.floor(np.mean(sum)).astype(int))
+            res.append(np.round(np.mean(sum)).astype(int))
             sum = []
         i += 1
-    
     grouped.append(res)
 
-print(grouped)
+stacks = [Stack(x) for x in grouped]
 
+ctx = {
+  "queue": [],
+  "alive": stacks[:]
+}
+
+while len(ctx["alive"]) > 0:
+  for stack in ctx["alive"]:
+    stack.tick(ctx)
+    if stack.idx >= len(stack.opcodes):
+      ctx["alive"].remove(stack)
